@@ -1,12 +1,27 @@
 # Tesla Supercharger V4 Fleet Router
 
-A small Python simulation of a Supercharger site. A rule engine reads four pieces of telemetry — battery temperature, pack voltage, station occupancy, and local grid demand — and decides two things: how much power the stall may deliver, and how expensive the charger is to drive through. An A* router then plans a path across a 5×5 map. When the site is hot, full, or stressing the grid, the charger tile gets expensive and the vehicle takes a bypass lane instead.
+A Python simulation of one Supercharger stop, where safety rules set the charging power and the cost of driving through the stall.
 
-Everything runs on the Python standard library. There are no third-party packages.
+## About
+
+This project is a rule-based expert system. A short list of `if` / `elif` checks stands in for the hard limits a charging site has to enforce: keep a hot battery off a high-power stall, give an open 800V cabinet the fast lane, and ease off when the station or the local grid is already loaded. Each rule sets a power cap and a cost for driving through the stall. When that cost climbs high enough, A* sends the vehicle around the site.
+
+The scene is a single vehicle crossing a 5×5 grid from `(0, 2)` to `(4, 2)`. Column `x = 2` is a wall with two gaps: the stall at `(2, 2)` and a bypass lane at `(2, 1)`. `src/main.py` asks for four readings. `src/engine.py` turns them into a power cap and a node-cost multiplier:
+
+- Battery temperature decides whether the pack can take a fast charge. Above 55°C the cap is 50 kW. From just above 45°C through 55°C the cap is 150 kW.
+- Pack voltage (`400V` or `800V`) and station occupancy decide the cabinet. A cool 800V vehicle at a site below 50% full is offered 350 kW. A 400V pack, or a site at 50% full or more, stays at the 250 kW baseline.
+- Grid demand above 85%, or a station at exactly 100% occupancy, halves whatever power the earlier rules chose and marks the stall as a place to avoid.
+
+`src/router.py` plans the drive with A*. An ordinary step costs 1. The step onto the stall costs `1 × multiplier`. On a cool, uncrowded 800V stop the multiplier is 0.5, the straight line through `(2, 2)` is the cheap path, and the report sends the vehicle in to charge. Above 55°C the multiplier is 5.0. Under the grid rule it is 10.0. The stall stays on the same coordinate either way. A* reads the higher cost as a jam and returns the longer bypass through `(2, 1)`.
+
+Thermal checks run first, and cabinet allocation runs only when the pack is 45°C or cooler. The grid rule runs last, so it can replace both the power and the multiplier. The same four numbers always produce the same cap, the same multiplier, and the same route. You type the readings at the keyboard, and the program prints which rules fired and which path it chose.
+
+The later sections list every threshold, the sample sessions, and the path costs.
 
 ## Requirements
 
 - Python 3
+- No third-party packages. `requirements.txt` records that the standard library (`os`, `sys`, and `heapq`) is enough.
 
 ## Run
 
